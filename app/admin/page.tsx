@@ -11,7 +11,6 @@ import {
   Search,
   LogOut,
   QrCode,
-  PlusCircle,
   Building2,
   Activity,
   ShieldCheck,
@@ -82,54 +81,80 @@ export default function AdminDashboardPage() {
     }
 
     async function loadDashboardStats() {
-      setFetchingStats(true);
-      try {
-        const [
-          { count: countBarang },
-          { count: countBidang },
-          { count: countUsers },
-          { data: itemsKondisi }
-        ] = await Promise.all([
-          supabase.from('data_barang').select('*', { count: 'exact', head: true }),
-          supabase.from('bidang').select('*', { count: 'exact', head: true }),
-          supabase.from('users').select('*', { count: 'exact', head: true }),
-          supabase.from('data_barang').select('kondisi_id')
-        ]);
+  setFetchingStats(true);
+  try {
+    // 1. Ambil data secara terpisah agar aman dari error join foreign key
+    const [
+      { count: countBarang },
+      { count: countBidang },
+      { count: countUsers },
+      { data: listKondisi },
+      { data: listBarang }
+    ] = await Promise.all([
+      supabase.from('data_barang').select('*', { count: 'exact', head: true }),
+      supabase.from('bidang').select('*', { count: 'exact', head: true }),
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase.from('kondisi').select('id, kondisi'), // <-- Disesuaikan ke kolom 'kondisi'
+      supabase.from('data_barang').select('kondisi_id')
+    ]);
 
-        let baik = 0;
-        let rusakRingan = 0;
-        let rusakBerat = 0;
-
-        if (itemsKondisi) {
-          itemsKondisi.forEach((item) => {
-            const kId = String(item.kondisi_id);
-            if (kId === '1' || kId === 'baik') {
-              baik++;
-            } else if (kId === '2' || kId === 'rusak_ringan') {
-              rusakRingan++;
-            } else if (kId === '3' || kId === 'rusak_berat') {
-              rusakBerat++;
-            } else {
-              baik++;
-            }
-          });
+    // 2. Map ID kondisi berdasarkan isi kolom 'kondisi'
+    const kondisiMap: Record<string, string> = {};
+    if (listKondisi && listKondisi.length > 0) {
+      listKondisi.forEach((k: any) => {
+        const idStr = String(k.id);
+        const teksKondisi = String(k.kondisi || '').toLowerCase(); // Murni baca kolom 'kondisi'
+        
+        if (teksKondisi.includes('baik')) {
+          kondisiMap[idStr] = 'baik';
+        } else if (teksKondisi.includes('ringan')) {
+          kondisiMap[idStr] = 'ringan';
+        } else if (teksKondisi.includes('berat') || teksKondisi.includes('afkir')) {
+          kondisiMap[idStr] = 'berat';
         }
-
-        setStatsData({
-          totalBarang: countBarang || 0,
-          totalBidang: countBidang || 0,
-          totalUsers: countUsers || 0,
-          totalPerbaikan: rusakRingan + rusakBerat,
-          kondisiBaik: baik,
-          kondisiRusakRingan: rusakRingan,
-          kondisiRusakBerat: rusakBerat,
-        });
-      } catch (err) {
-        console.error('Gagal mengambil data statistik:', err);
-      } finally {
-        setFetchingStats(false);
-      }
+      });
     }
+
+    let baik = 0;
+    let rusakRingan = 0;
+    let rusakBerat = 0;
+
+    // 3. Hitung total tiap kategori
+    if (listBarang && listBarang.length > 0) {
+      listBarang.forEach((item: any) => {
+        const rawId = String(item.kondisi_id || '').toLowerCase();
+        const kategoriMapped = kondisiMap[rawId];
+
+        if (kategoriMapped === 'baik' || rawId === '1' || rawId === 'baik') {
+          baik++;
+        } else if (kategoriMapped === 'ringan' || rawId === '2' || rawId.includes('ringan')) {
+          rusakRingan++;
+        } else if (kategoriMapped === 'berat' || rawId === '3' || rawId.includes('berat')) {
+          rusakBerat++;
+        } else {
+          // Default jika ID tidak cocok/kosong
+          baik++;
+        }
+      });
+    }
+
+    const totalBarangCount = countBarang || 0;
+
+    setStatsData({
+      totalBarang: totalBarangCount,
+      totalBidang: countBidang || 0,
+      totalUsers: countUsers || 0,
+      totalPerbaikan: rusakRingan + rusakBerat,
+      kondisiBaik: baik,
+      kondisiRusakRingan: rusakRingan,
+      kondisiRusakBerat: rusakBerat,
+    });
+  } catch (err) {
+    console.error('Gagal mengambil data statistik:', err);
+  } finally {
+    setFetchingStats(false);
+  }
+}
 
     loadDashboardStats();
   }, [router, supabase]);
@@ -151,7 +176,6 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // Formatting Kartu Metric
   const stats = [
     { 
       label: 'Total Inventaris', 
@@ -187,10 +211,11 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const totalBarangKondisi = statsData.totalBarang || 1;
-  const pctBaik = Math.round((statsData.kondisiBaik / totalBarangKondisi) * 100);
-  const pctRusakRingan = Math.round((statsData.kondisiRusakRingan / totalBarangKondisi) * 100);
-  const pctRusakBerat = Math.round((statsData.kondisiRusakBerat / totalBarangKondisi) * 100);
+  // Kalkulasi total real dari penjumlahan kondisi untuk kalkulasi persentase
+  const totalDihitung = (statsData.kondisiBaik + statsData.kondisiRusakRingan + statsData.kondisiRusakBerat) || 1;
+  const pctBaik = Math.round((statsData.kondisiBaik / totalDihitung) * 100);
+  const pctRusakRingan = Math.round((statsData.kondisiRusakRingan / totalDihitung) * 100);
+  const pctRusakBerat = Math.round((statsData.kondisiRusakBerat / totalDihitung) * 100);
 
   const menuCards = [
     {
@@ -224,16 +249,15 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 relative overflow-hidden">
-      {/* Dynamic Ambient Background Blur Circles */}
+      {/* Ambient Background Blur */}
       <div className="fixed -top-20 -left-20 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed top-1/3 -right-20 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed -bottom-20 left-1/3 w-96 h-96 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* 1. HEADER UTAMA (Glassmorphism) */}
+      {/* HEADER UTAMA */}
       <header className="bg-white/70 backdrop-blur-md border-b border-white/50 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
-            {/* Identitas Instansi */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-blue-700/90 text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-md shadow-blue-200 backdrop-blur-sm">
                 <Building2 className="w-7 h-7" />
@@ -248,7 +272,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Profil User & Tombol Akses (Desktop) */}
             <div className="hidden md:flex items-center gap-3">
               <div className="flex items-center gap-2 bg-slate-200/50 backdrop-blur-sm px-3.5 py-1.5 rounded-full border border-white/60 shadow-inner">
                 <div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold capitalize shadow">
@@ -277,7 +300,6 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
-            {/* Toggle Mobile Menu */}
             <div className="md:hidden flex items-center">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -289,7 +311,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Mobile Menu Dropdown (Glassmorphism) */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white/80 backdrop-blur-lg border-b border-white/60 px-4 pt-2 pb-4 space-y-3">
             <div className="p-3 bg-slate-100/60 backdrop-blur-sm rounded-lg flex items-center gap-3 border border-white/60">
@@ -321,10 +342,10 @@ export default function AdminDashboardPage() {
         )}
       </header>
 
-      {/* 2. KONTEN UTAMA */}
+      {/* KONTEN UTAMA */}
       <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 relative z-10">
         
-        {/* Banner Welcome & Fast Search (Frosted Glass Blue) */}
+        {/* Banner Welcome */}
         <div className="bg-gradient-to-r from-blue-900/90 via-blue-800/90 to-indigo-900/90 backdrop-blur-xl rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-white/20 relative overflow-hidden">
           <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           
@@ -339,7 +360,6 @@ export default function AdminDashboardPage() {
               Sistem Pengelolaan Inventaris Barang Dinas Komunikasi dan Informatika siap digunakan.
             </p>
 
-            {/* Input Pencarian Fitur/Menu (Glassy Input) */}
             <div className="mt-6 relative max-w-md">
               <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -353,7 +373,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 3. METRIC CARDS / STATISTIK DINAMIS (Glassmorphism Cards) */}
+        {/* METRIC CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((item, idx) => {
             const Icon = item.icon;
@@ -380,7 +400,7 @@ export default function AdminDashboardPage() {
           })}
         </div>
 
-        {/* 4. MENU NAVIGASI KELOLA UTAMA */}
+        {/* MENU UTAMA */}
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -435,49 +455,9 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
-        {/* 5. BAGIAN TAMBAHAN: AKSES CEPAT + STATISTIK KONDISI DINAMIS */}
+        {/* RINGKASAN KONDISI BARANG (REALTIME DENGAN FIX) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Akses Cepat / Action Shortcuts */}
-          <div className="bg-white/60 backdrop-blur-md p-6 rounded-2xl border border-white/70 shadow-sm">
-            <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
-              <PlusCircle className="w-4 h-4 text-emerald-600" /> Akses Pintasan Cepat
-            </h4>
-            <div className="space-y-2.5">
-              <button
-                onClick={() => router.push('/admin/barang')}
-                className="w-full text-left p-3 rounded-xl bg-slate-50/60 hover:bg-blue-50/80 hover:border-blue-200/80 border border-slate-200/50 text-xs font-medium text-slate-700 flex items-center justify-between transition backdrop-blur-sm"
-              >
-                <span className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-blue-600" /> + Tambah Inventaris Barang Baru
-                </span>
-                <span className="text-slate-400">&rsaquo;</span>
-              </button>
-
-              <button
-                onClick={() => router.push('/admin/users')}
-                className="w-full text-left p-3 rounded-xl bg-slate-50/60 hover:bg-purple-50/80 hover:border-purple-200/80 border border-slate-200/50 text-xs font-medium text-slate-700 flex items-center justify-between transition backdrop-blur-sm"
-              >
-                <span className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-purple-600" /> + Daftarkan Operator / User Baru
-                </span>
-                <span className="text-slate-400">&rsaquo;</span>
-              </button>
-
-              <button
-                onClick={() => router.push('/admin/qr-bidang')}
-                className="w-full text-left p-3 rounded-xl bg-slate-50/60 hover:bg-emerald-50/80 hover:border-emerald-200/80 border border-slate-200/50 text-xs font-medium text-slate-700 flex items-center justify-between transition backdrop-blur-sm"
-              >
-                <span className="flex items-center gap-2">
-                  <QrCode className="w-4 h-4 text-emerald-600" /> Generasi Kode QR Lokasi Bidang
-                </span>
-                <span className="text-slate-400">&rsaquo;</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Chart Visual Kondisi Barang (Realtime) */}
-          <div className="bg-white/60 backdrop-blur-md p-6 rounded-2xl border border-white/70 shadow-sm lg:col-span-2">
+          <div className="bg-white/60 backdrop-blur-md p-6 rounded-2xl border border-white/70 shadow-sm lg:col-span-3">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-blue-600" /> Ringkasan Kondisi Aset Barang
@@ -543,7 +523,6 @@ export default function AdminDashboardPage() {
               </p>
             </div>
           </div>
-
         </div>
 
       </main>
