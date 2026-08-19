@@ -309,7 +309,7 @@ export default function OperatorBarangPage() {
       const filename = `KIR_${userBidangName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
       const options = {
-  margin: [8, 8, 8, 8] as [8, 8, 8, 8],
+  margin: [8, 8, 8, 8] as [number, number, number, number],
   filename: filename,
   image: { type: 'jpeg' as const, quality: 0.98 },
   html2canvas: {
@@ -325,7 +325,7 @@ export default function OperatorBarangPage() {
   },
 };
 
-await html2pdf().set(options).from(element).save();
+await html2pdf().set(options as any).from(element).save();
     } catch (error) {
       console.error('Gagal membuat PDF:', error);
       alert('Terjadi kesalahan saat mengunduh PDF.');
@@ -425,7 +425,7 @@ await html2pdf().set(options).from(element).save();
     const nibarVal = item.nibar?.toLowerCase() || '';
     const regVal = item.nomor_register?.toLowerCase() || '';
     const spekVal = item.spesifikasi?.toLowerCase() || '';
-    const merkVal = item.merk?.merk?.toLowerCase() || '';
+    const merkVal = item.merk?.toLowerCase() || '';
     const ketVal = item.keterangan?.toLowerCase() || '';
 
     return (
@@ -611,7 +611,7 @@ await html2pdf().set(options).from(element).save();
 
                     <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                       <div><span className="text-slate-400">Kode:</span> {item.kode_barang || '-'}</div>
-                      <div><span className="text-slate-400">Merk:</span> {item.merk?.merk || '-'}</div>
+                      <div><span className="text-slate-400">Merk:</span> {item.merk || '-'}</div>
                       <div><span className="text-slate-400">Nibar:</span> {item.nibar || '-'}</div>
                       <div><span className="text-slate-400">Kondisi:</span> {item.kondisi?.kondisi || item.kondisi?.nama_kondisi || '-'}</div>
                       <div><span className="text-slate-400">Reg:</span> {item.nomor_register || '-'}</div>
@@ -673,7 +673,7 @@ await html2pdf().set(options).from(element).save();
                         <td className="p-3 max-w-[180px] truncate" title={item.spesifikasi || ''}>
                           {item.spesifikasi || '-'}
                         </td>
-                        <td className="p-3">{item.merk?.merk || '-'}</td>
+                        <td className="p-3">{item.merk || '-'}</td>
                         <td className="p-3">
                           <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">
                             {item.kondisi?.kondisi || item.kondisi?.nama_kondisi || '-'}
@@ -860,7 +860,7 @@ await html2pdf().set(options).from(element).save();
                     ) : (
                       exportFilteredBarang.map((item, index) => {
                         const namaBarang = item.barang?.nama_barang || item.master_barang?.nama_barang || '-';
-                        const namaMerk = item.merk?.merk || '-';
+                        const namaMerk = item.merk || '-';
                         const tahunVal = item.tahun?.tahun || '-';
                         const satuanVal = item.satuan?.satuan || '-';
                         const kondisiVal = item.kondisi?.kondisi || item.kondisi?.nama_kondisi || '-';
@@ -1080,21 +1080,21 @@ await html2pdf().set(options).from(element).save();
 
                 {/* Kondisi */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Kondisi Barang <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={selectedKondisi}
-                    onChange={(e) => setSelectedKondisi(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white text-slate-800"
-                  >
-                    <option value="">-- Pilih Kondisi --</option>
-                    {listKondisi.map((i) => (
-                      <option key={i.id} value={i.id}>{i.nama}</option>
-                    ))}
-                  </select>
-                </div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Kondisi Barang <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  {...({ required: true } as any)}
+                  value={selectedKondisi}
+                  onChange={(e) => setSelectedKondisi(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 bg-white text-slate-800"
+                >
+                  <option value="">-- Pilih Kondisi --</option>
+                  {listKondisi.map((i) => (
+                    <option key={i.id} value={i.id}>{i.nama}</option>
+                  ))}
+                </select>
+              </div>
 
                 <div className="sm:col-span-2 md:col-span-3">
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
